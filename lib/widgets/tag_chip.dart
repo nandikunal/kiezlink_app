@@ -15,7 +15,7 @@ class TagChip extends StatelessWidget {
         vertical: AppConfig.paddingSmall / 2,
       ),
       decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(AppOpacity.low),
+        color: Colors.blue.withValues(alpha: AppOpacity.low),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
