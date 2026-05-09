@@ -53,10 +53,10 @@ class _StoryCardState extends State<StoryCard> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withOpacity(0.1),
+                Colors.black.withValues(alpha: 0.1),
                 Colors.transparent,
-                Colors.black.withOpacity(0.55),
-                Colors.black.withOpacity(0.97),
+                Colors.black.withValues(alpha: 0.55),
+                Colors.black.withValues(alpha: 0.97),
               ],
               stops: GradientStops.cardGradient,
             ),
@@ -86,10 +86,10 @@ class _StoryCardState extends State<StoryCard> {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(AppOpacity.veryLow),
+                      color: Colors.white.withValues(alpha: AppOpacity.veryLow),
                       borderRadius: BorderRadius.circular(4),
                       border: Border.all(
-                        color: Colors.white.withOpacity(AppOpacity.veryLow),
+                        color: Colors.white.withValues(alpha: AppOpacity.veryLow),
                       ),
                     ),
                     child: Text(
@@ -105,7 +105,7 @@ class _StoryCardState extends State<StoryCard> {
                   Text(
                     DateTimeUtils.timeAgo(item.publishedAt),
                     style: TextStyle(
-                      color: Colors.white.withOpacity(AppOpacity.medium),
+                      color: Colors.white.withValues(alpha: AppOpacity.medium),
                       fontSize: AppConfig.fontSizeXSmall,
                     ),
                   ),
@@ -117,7 +117,7 @@ class _StoryCardState extends State<StoryCard> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppConfig.successColor.withOpacity(AppOpacity.low),
+                        color: AppConfig.successColor.withValues(alpha: AppOpacity.low),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
@@ -153,7 +153,7 @@ class _StoryCardState extends State<StoryCard> {
                     maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(AppOpacity.high),
+                      color: Colors.white.withValues(alpha: AppOpacity.high),
                       fontSize: AppConfig.fontSizeLarge,
                       height: 1.5,
                     ),
@@ -161,7 +161,7 @@ class _StoryCardState extends State<StoryCard> {
                   secondChild: Text(
                     item.content,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(AppOpacity.high),
+                      color: Colors.white.withValues(alpha: AppOpacity.high),
                       fontSize: AppConfig.fontSizeLarge,
                       height: 1.5,
                     ),
@@ -204,9 +204,7 @@ class _StoryCardState extends State<StoryCard> {
               () => provider.toggleBookmark(item.id),
             ),
             const SizedBox(height: AppConfig.paddingXLarge),
-            _sideBtn(Icons.share, Colors.white, () {
-              // Share functionality can be implemented here
-            }),
+            _sideBtn(Icons.share, Colors.white, () {}),
           ]),
         ),
 
@@ -220,9 +218,11 @@ class _StoryCardState extends State<StoryCard> {
               vertical: AppConfig.paddingSmall,
             ),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(AppOpacity.medium),
+              color: Colors.black.withValues(alpha: AppOpacity.medium),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(AppOpacity.veryLow)),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: AppOpacity.veryLow),
+              ),
             ),
             child: Text(
               '${widget.index + 1} / ${widget.total}',
@@ -247,7 +247,11 @@ class _StoryCardState extends State<StoryCard> {
           ),
         ),
         child: const Center(
-          child: Icon(Icons.article, color: Colors.white24, size: AppConfig.iconSizeGiant),
+          child: Icon(
+            Icons.article,
+            color: Colors.white24,
+            size: AppConfig.iconSizeGiant,
+          ),
         ),
       );
 
@@ -258,9 +262,11 @@ class _StoryCardState extends State<StoryCard> {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(AppOpacity.low),
+            color: Colors.black.withValues(alpha: AppOpacity.low),
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withOpacity(AppOpacity.veryLow)),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: AppOpacity.veryLow),
+            ),
           ),
           child: Icon(icon, color: color, size: AppConfig.iconSizeLarge),
         ),
@@ -280,10 +286,10 @@ class _StoryCardState extends State<StoryCard> {
             vertical: AppConfig.paddingSmall,
           ),
           decoration: BoxDecoration(
-            color: (color ?? Colors.white).withOpacity(AppOpacity.veryLow),
+            color: (color ?? Colors.white).withValues(alpha: AppOpacity.veryLow),
             borderRadius: BorderRadius.circular(AppConfig.borderRadiusSmall),
             border: Border.all(
-              color: (color ?? Colors.white).withOpacity(AppOpacity.veryLow),
+              color: (color ?? Colors.white).withValues(alpha: AppOpacity.veryLow),
             ),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
