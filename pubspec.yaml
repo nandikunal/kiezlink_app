@@ -25,5 +25,7 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/images/
+  # FIX: Removed assets/images/ declaration — the directory does not
+  # exist in the repo, causing flutter build to fail. All images are
+  # loaded remotely via CachedNetworkImage. Re-add this section only
+  # when you add actual local assets.
