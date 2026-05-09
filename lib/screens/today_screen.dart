@@ -132,22 +132,25 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
     }
   }
 
+  // FIX: AppOpacity is a constants class (not a Widget). Replaced with
+  // Flutter's built-in Opacity widget. Added .clamp(0.0, 1.0) so the
+  // animated value never goes outside the valid [0, 1] range.
   Widget _buildSwipeHint() => AnimatedBuilder(
         animation: _hintCtrl,
         builder: (_, __) => Transform.translate(
           offset: Offset(0, -8 * _hintCtrl.value),
-          child: AppOpacity(
-            opacity: 1 - _hintCtrl.value * AppOpacity.low,
+          child: Opacity(
+            opacity: (1 - _hintCtrl.value * AppOpacity.low).clamp(0.0, 1.0),
             child: Column(children: [
               Icon(
                 Icons.keyboard_arrow_up,
-                color: Colors.white.withOpacity(AppOpacity.high),
+                color: Colors.white.withValues(alpha: AppOpacity.high),
                 size: AppConfig.iconSizeXLarge,
               ),
               Text(
                 AppConfig.messageSwipeForNext,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(AppOpacity.medium),
+                  color: Colors.white.withValues(alpha: AppOpacity.medium),
                   fontSize: AppConfig.fontSizeSmall,
                 ),
               ),
@@ -224,7 +227,7 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
             children: [
               Icon(
                 Icons.wifi_off_rounded,
-                color: Colors.white.withOpacity(AppOpacity.low),
+                color: Colors.white.withValues(alpha: AppOpacity.low),
                 size: AppConfig.iconSizeHuge,
               ),
               const SizedBox(height: AppConfig.paddingXLarge),
@@ -241,7 +244,7 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
                 provider.errorMessage,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withOpacity(AppOpacity.medium),
+                  color: Colors.white.withValues(alpha: AppOpacity.medium),
                   fontSize: AppConfig.fontSizeLarge,
                 ),
               ),
@@ -278,7 +281,7 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
           children: [
             Icon(
               Icons.search_off,
-              color: Colors.white.withOpacity(AppOpacity.low),
+              color: Colors.white.withValues(alpha: AppOpacity.low),
               size: AppConfig.iconSizeHuge,
             ),
             const SizedBox(height: AppConfig.paddingXLarge),
@@ -294,7 +297,7 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
             Text(
               AppConfig.errorTryDifferentSearch,
               style: TextStyle(
-                color: Colors.white.withOpacity(AppOpacity.low),
+                color: Colors.white.withValues(alpha: AppOpacity.low),
                 fontSize: AppConfig.fontSizeLarge,
               ),
             ),
@@ -307,7 +310,10 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Colors.black.withOpacity(AppOpacity.high), Colors.transparent],
+            colors: [
+              Colors.black.withValues(alpha: AppOpacity.high),
+              Colors.transparent,
+            ],
           ),
         ),
         padding: EdgeInsets.only(
@@ -381,15 +387,17 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(AppOpacity.low),
+          color: Colors.black.withValues(alpha: AppOpacity.low),
           borderRadius: BorderRadius.circular(AppConfig.borderRadiusMedium),
-          border: Border.all(color: Colors.white.withOpacity(AppOpacity.veryLow)),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: AppOpacity.veryLow),
+          ),
         ),
         child: Icon(icon, color: Colors.white, size: AppConfig.iconSizeMedium),
       );
 
   Widget _buildSearchBar(NewsProvider provider) => Container(
-        color: Colors.black.withOpacity(AppOpacity.high),
+        color: Colors.black.withValues(alpha: AppOpacity.high),
         padding: EdgeInsets.only(
           top: MediaQuery.of(context).padding.top + AppConfig.paddingMedium,
           left: AppConfig.paddingMedium,
@@ -404,11 +412,15 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 hintText: AppConfig.textSearchNews,
-                hintStyle: TextStyle(color: Colors.white.withOpacity(AppOpacity.low)),
-                prefixIcon: Icon(Icons.search,
-                    color: Colors.white.withOpacity(AppOpacity.low)),
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: AppOpacity.low),
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: Colors.white.withValues(alpha: AppOpacity.low),
+                ),
                 filled: true,
-                fillColor: Colors.white.withOpacity(AppOpacity.trace),
+                fillColor: Colors.white.withValues(alpha: AppOpacity.trace),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(AppConfig.borderRadiusMedium),
@@ -424,9 +436,9 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
               _searchCtrl.clear();
               provider.toggleSearch();
             },
-            child: Text(
+            child: const Text(
               AppConfig.errorCancel,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppConfig.primaryColor,
                 fontSize: AppConfig.fontSizeMedium,
               ),
@@ -443,11 +455,15 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
         final active = i == current.clamp(0, AppConfig.maxDots - 1);
         return AnimatedContainer(
           duration: AppConfig.animationDurationFast,
-          margin: const EdgeInsets.symmetric(vertical: AppConfig.paddingSmall / 2),
+          margin: const EdgeInsets.symmetric(
+            vertical: AppConfig.paddingSmall / 2,
+          ),
           width: active ? 4 : 3,
           height: active ? 20 : 6,
           decoration: BoxDecoration(
-            color: active ? Colors.white : Colors.white.withOpacity(AppOpacity.low),
+            color: active
+                ? Colors.white
+                : Colors.white.withValues(alpha: AppOpacity.low),
             borderRadius: BorderRadius.circular(4),
           ),
         );
@@ -459,7 +475,7 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
         context: context,
         barrierDismissible: true,
         barrierLabel: 'Close',
-        barrierColor: Colors.black.withOpacity(AppOpacity.medium),
+        barrierColor: Colors.black.withValues(alpha: AppOpacity.medium),
         transitionDuration: AppConfig.animationDurationNormal,
         pageBuilder: (_, __, ___) => const Align(
           alignment: Alignment.centerLeft,
