@@ -5,7 +5,7 @@ class AppConfig {
   // API Configuration
   static const String apiUrlAndroid = 'http://10.0.2.2:8000/v1/today?page=1&per_page=20';
   static const String apiUrlDevices = 'http://192.168.1.100:8000/v1/today?page=1&per_page=20'; // Update with your server IP
-  static const String apiKey = 'my-mobile-read-key-123456';
+  static const String apiKey = 'VJvcqEmReRu4cIUq4CKBUeDD0fK6u7l5qKBQDmbho8w';
   static const int requestTimeout = 12; // seconds
   static const int readDelayMs = 1500; // milliseconds
   static const int swipeHintDelayMs = 3000; // milliseconds
