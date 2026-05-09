@@ -4,8 +4,13 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:enableOnBackInvokedCallback="true"
-        android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
+        
+        <!--
+            for running on local emulator with HTTP API at
+            android:usesCleartextTraffic="true" 
+        -->
+        
         <!--
           FIX: Removed android:usesCleartextTraffic="false" which was
           overriding network_security_config.xml at the manifest level,
