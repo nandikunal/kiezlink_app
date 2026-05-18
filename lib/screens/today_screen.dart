@@ -7,6 +7,7 @@ import '../config/constants.dart';
 import '../data/news_provider.dart';
 import '../widgets/story_card.dart';
 import '../widgets/side_menu.dart';
+import '../services/sse_service.dart';
 
 class TodayScreen extends StatefulWidget {
   const TodayScreen({super.key});
@@ -15,40 +16,89 @@ class TodayScreen extends StatefulWidget {
   State<TodayScreen> createState() => _TodayScreenState();
 }
 
-class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin {
+class _TodayScreenState extends State<TodayScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late PageController _pageController;
   Timer? _readTimer;
   bool _showSwipeHint = true;
   late AnimationController _hintCtrl;
   late TextEditingController _searchCtrl;
+  SseService? _sseService;
+  bool _pageControllerReady = false;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
+    WidgetsBinding.instance.addObserver(this);
+
     _hintCtrl = AnimationController(
       vsync: this,
       duration: AppConfig.animationDurationSlow,
     )..repeat(reverse: true);
     _searchCtrl = TextEditingController();
 
-    // Hide swipe hint after delay
     Future.delayed(const Duration(milliseconds: AppConfig.swipeHintDelayMs), () {
       if (mounted) setState(() => _showSwipeHint = false);
     });
 
-    // Load feeds
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) context.read<NewsProvider>().loadFeeds();
+      if (!mounted) return;
+      final provider = context.read<NewsProvider>();
+      provider.loadFeeds().then((_) {
+        // Build PageController with the restored initial index
+        if (mounted) {
+          setState(() {
+            _pageController = PageController(
+              initialPage: provider.currentIndex,
+            );
+            _pageControllerReady = true;
+          });
+          _startSse(provider);
+        }
+      });
     });
+
+    // Placeholder controller until feeds load
+    _pageController = PageController();
+  }
+
+  void _startSse(NewsProvider provider) {
+    _sseService?.stop();
+    _sseService = SseService(
+      onNewStories: (count) {
+        if (mounted) provider.setNewStoriesCount(count);
+      },
+    );
+    _sseService!.start();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final provider = context.read<NewsProvider>();
+    if (state == AppLifecycleState.resumed) {
+      // App came back to foreground — reload to detect new stories
+      provider.loadFeeds(fromResume: true).then((_) {
+        if (!mounted) return;
+        final newIndex = provider.currentIndex;
+        if (_pageControllerReady && newIndex != _pageController.page?.round()) {
+          _pageController.jumpToPage(newIndex);
+        }
+        _sseService?.stop();
+        _startSse(provider);
+      });
+    } else if (state == AppLifecycleState.paused) {
+      _sseService?.stop();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _readTimer?.cancel();
     _hintCtrl.dispose();
     _searchCtrl.dispose();
+    _sseService?.stop();
     super.dispose();
   }
 
@@ -75,16 +125,28 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
       backgroundColor: AppConfig.backgroundColor,
       body: Stack(children: [
         _buildFeedArea(provider),
-        Positioned(top: 0, left: 0, right: 0, child: _buildFloatingNav(provider)),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: _buildFloatingNav(provider),
+        ),
         if (provider.isSearchActive)
-          Positioned(top: 0, left: 0, right: 0, child: _buildSearchBar(provider)),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _buildSearchBar(provider),
+          ),
         if (provider.state == FeedState.loaded &&
             provider.filteredItems.isNotEmpty &&
             !provider.isSearchActive)
           Positioned(
             right: AppConfig.paddingSmall,
-            top: MediaQuery.of(context).size.height * AppConfig.progressDotsTopFraction,
-            bottom: MediaQuery.of(context).size.height * AppConfig.progressDotsBottomFraction,
+            top: MediaQuery.of(context).size.height *
+                AppConfig.progressDotsTopFraction,
+            bottom: MediaQuery.of(context).size.height *
+                AppConfig.progressDotsBottomFraction,
             child: _buildProgressDots(
               provider.filteredItems.length,
               provider.currentIndex,
@@ -99,7 +161,64 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
             right: 0,
             child: _buildSwipeHint(),
           ),
+        // ── New-stories banner ──────────────────────────────────────────────
+        if (provider.newStoriesCount > 0)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 60,
+            left: 0,
+            right: 0,
+            child: _buildNewStoriesBanner(provider),
+          ),
       ]),
+    );
+  }
+
+  Widget _buildNewStoriesBanner(NewsProvider provider) {
+    return GestureDetector(
+      onTap: () {
+        provider.clearNewStoriesCount();
+        provider.refresh().then((_) {
+          if (mounted && _pageControllerReady) {
+            _pageController.jumpToPage(0);
+          }
+        });
+      },
+      child: Center(
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: AppConfig.paddingLarge),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppConfig.paddingXLarge,
+            vertical: AppConfig.paddingMedium,
+          ),
+          decoration: BoxDecoration(
+            color: AppConfig.primaryColor,
+            borderRadius:
+                BorderRadius.circular(AppConfig.borderRadiusLarge),
+            boxShadow: [
+              BoxShadow(
+                color: AppConfig.primaryColor.withValues(alpha: 0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.refresh, color: Colors.black, size: 16),
+              const SizedBox(width: AppConfig.paddingSmall),
+              Text(
+                '${provider.newStoriesCount} ${AppConfig.messageNewStories}',
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: AppConfig.fontSizeMedium,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -117,24 +236,23 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
           onRefresh: provider.refresh,
           color: AppConfig.primaryColor,
           backgroundColor: AppConfig.backgroundColor,
-          child: PageView.builder(
-            controller: _pageController,
-            scrollDirection: Axis.vertical,
-            onPageChanged: _onPageChanged,
-            itemCount: items.length,
-            itemBuilder: (_, i) => StoryCard(
-              item: items[i],
-              index: i,
-              total: items.length,
-            ),
-          ),
+          child: _pageControllerReady
+              ? PageView.builder(
+                  controller: _pageController,
+                  scrollDirection: Axis.vertical,
+                  onPageChanged: _onPageChanged,
+                  itemCount: items.length,
+                  itemBuilder: (_, i) => StoryCard(
+                    item: items[i],
+                    index: i,
+                    total: items.length,
+                  ),
+                )
+              : _buildShimmer(),
         );
     }
   }
 
-  // FIX: AppOpacity is a constants class (not a Widget). Replaced with
-  // Flutter's built-in Opacity widget. Added .clamp(0.0, 1.0) so the
-  // animated value never goes outside the valid [0, 1] range.
   Widget _buildSwipeHint() => AnimatedBuilder(
         animation: _hintCtrl,
         builder: (_, __) => Transform.translate(
@@ -178,37 +296,43 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
                       width: 80,
                       height: 20,
                       color: Colors.white,
-                      margin: const EdgeInsets.only(bottom: AppConfig.paddingMedium),
+                      margin:
+                          const EdgeInsets.only(bottom: AppConfig.paddingMedium),
                     ),
                     Container(
                       width: double.infinity,
                       height: 28,
                       color: Colors.white,
-                      margin: const EdgeInsets.only(bottom: AppConfig.paddingSmall),
+                      margin:
+                          const EdgeInsets.only(bottom: AppConfig.paddingSmall),
                     ),
                     Container(
                       width: 260,
                       height: 28,
                       color: Colors.white,
-                      margin: const EdgeInsets.only(bottom: AppConfig.paddingLarge),
+                      margin:
+                          const EdgeInsets.only(bottom: AppConfig.paddingLarge),
                     ),
                     Container(
                       width: double.infinity,
                       height: 14,
                       color: Colors.white,
-                      margin: const EdgeInsets.only(bottom: AppConfig.paddingSmall),
+                      margin:
+                          const EdgeInsets.only(bottom: AppConfig.paddingSmall),
                     ),
                     Container(
                       width: double.infinity,
                       height: 14,
                       color: Colors.white,
-                      margin: const EdgeInsets.only(bottom: AppConfig.paddingSmall),
+                      margin:
+                          const EdgeInsets.only(bottom: AppConfig.paddingSmall),
                     ),
                     Container(
                       width: 200,
                       height: 14,
                       color: Colors.white,
-                      margin: const EdgeInsets.only(bottom: AppConfig.paddingXLarge),
+                      margin:
+                          const EdgeInsets.only(bottom: AppConfig.paddingXLarge),
                     ),
                   ],
                 ),
@@ -258,7 +382,8 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
                   ),
                   decoration: BoxDecoration(
                     color: AppConfig.primaryColor,
-                    borderRadius: BorderRadius.circular(AppConfig.borderRadiusMedium),
+                    borderRadius:
+                        BorderRadius.circular(AppConfig.borderRadiusMedium),
                   ),
                   child: const Text(
                     AppConfig.errorTryAgain,
@@ -423,7 +548,8 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
                 fillColor: Colors.white.withValues(alpha: AppOpacity.trace),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppConfig.borderRadiusMedium),
+                  borderRadius:
+                      BorderRadius.circular(AppConfig.borderRadiusMedium),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -483,7 +609,8 @@ class _TodayScreenState extends State<TodayScreen> with TickerProviderStateMixin
         ),
         transitionBuilder: (_, anim, __, child) => SlideTransition(
           position: Tween<Offset>(begin: const Offset(-1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+              .animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
           child: child,
         ),
       );

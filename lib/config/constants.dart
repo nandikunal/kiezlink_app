@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 /// Application Configuration Constants
 class AppConfig {
   // API Configuration
-  static const String apiUrlAndroid = 'https://news-feed-yip1.onrender.com/v1/today?page=1&per_page=20';
-  static const String apiUrlDevices = 'https://news-feed-yip1.onrender.com/v1/today?page=1&per_page=20'; // Update with your server IP
+  static const String _apiBase = 'https://news-feed-yip1.onrender.com';
+  static const String apiUrlAndroid = '$_apiBase/v1/today?page=1&per_page=20';
+  static const String apiUrlDevices = '$_apiBase/v1/today?page=1&per_page=20';
+  static const String apiStatsUrl = '$_apiBase/v1/today/stats';
+  static const String apiUpdatesUrl = '$_apiBase/v1/today/updates';
   static const String apiKey = 'VJvcqEmReRu4cIUq4CKBUeDD0fK6u7l5qKBQDmbho8w';
   static const int requestTimeout = 12; // seconds
   static const int readDelayMs = 1500; // milliseconds
   static const int swipeHintDelayMs = 3000; // milliseconds
+  static const int ssePollingIntervalSeconds = 30;
 
   // UI Constants - Colors
   static const Color primaryColor = Color(0xFFF59E0B);
@@ -78,8 +82,24 @@ class AppConfig {
     'Germany',
   ];
 
+  // Topic → API tag mapping (lowercased for matching story.tag)
+  static const Map<String, List<String>> topicTagMap = {
+    'Technology': ['tech', 'technology'],
+    'Sports': ['sports', 'sport'],
+    'Health': ['health'],
+    'Economy': ['finance', 'economy', 'business'],
+    'Culture': ['entertainment', 'culture', 'arts'],
+    'Environment': ['environment', 'climate', 'science'],
+    'Transport': ['transport', 'traffic'],
+    'Politics': ['politics'],
+    'Berlin': ['local', 'berlin'],
+    'Germany': ['germany', 'general'],
+    'News': ['general', 'news'],
+  };
+
   // Error Messages
-  static const String errorNoArticles = 'No articles found. Check if the API server is running at http://127.0.0.1:8000';
+  static const String errorNoArticles =
+      'No articles found. Check if the API server is running at http://127.0.0.1:8000';
   static const String errorFailedToLoad = 'Failed to load news';
   static const String errorCouldNotLoadNews = 'Could not load news';
   static const String errorUrlNotAvailable = 'URL not available';
@@ -92,6 +112,7 @@ class AppConfig {
 
   // Success Messages
   static const String messageSwipeForNext = 'Swipe up for next story';
+  static const String messageNewStories = 'new stories available';
 
   // UI Text
   static const String textReadCount = 'Read';
@@ -108,6 +129,8 @@ class AppConfig {
   static const String textMore = 'More';
   static const String textLess = 'Less';
   static const String textFullStory = 'Full Story';
+  static const String textAllTopicsLoaded =
+      'All topics are loaded. Pull to refresh for new stories.';
 
   // Image Constants
   static const double imagePreviewWidth = 52.0;

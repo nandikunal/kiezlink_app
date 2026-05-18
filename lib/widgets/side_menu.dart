@@ -3,6 +3,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import '../config/constants.dart';
 import '../data/news_provider.dart';
+import '../services/prefs_service.dart';
+import '../services/location_service.dart';
 import '../utils/utils.dart';
 import 'tag_chip.dart';
 
@@ -16,16 +18,47 @@ class _SideMenuState extends State<SideMenu> {
   bool _trendingExpanded = true;
   bool _topStoriesExpanded = false;
   bool _myFeedExpanded = true;
-  final List<String> _activeTopics = AppConfig.activeTopicsByDefault.toList();
+
+  late List<String> _activeTopics;
   final List<String> _allTopics = AppConfig.defaultTopics;
+
+  late String _displayName;
+  late String _locationLabel;
+
+  @override
+  void initState() {
+    super.initState();
+    _activeTopics = PrefsService.getSelectedTopics(AppConfig.activeTopicsByDefault);
+    _displayName = LocationService.getOrCreateDisplayName();
+    _locationLabel = PrefsService.getLocationLabel();
+    _refreshLocation();
+  }
+
+  /// Re-request location if not yet asked, or just load from prefs.
+  Future<void> _refreshLocation() async {
+    if (!PrefsService.getLocationAsked()) {
+      final label = await LocationService.requestAndResolveLocation();
+      if (mounted) setState(() => _locationLabel = label);
+    }
+  }
+
+  void _toggleTopic(String topic) {
+    setState(() {
+      if (_activeTopics.contains(topic)) {
+        // Keep at least 1 topic selected
+        if (_activeTopics.length > 1) _activeTopics.remove(topic);
+      } else {
+        _activeTopics.add(topic);
+      }
+    });
+    // Wire into provider so filteredItems updates immediately
+    context.read<NewsProvider>().setSelectedTopics(List.from(_activeTopics));
+  }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<NewsProvider>();
     return Container(
-      // FIX: Was `LayoutConstants.tabletBreakpoint / 600` = 600.0/600 = 1.0
-      // (full-screen width). Now correctly uses AppConfig.sideMenuWidthFraction
-      // which is defined as 0.82 (82% of screen width).
       width: MediaQuery.of(context).size.width * AppConfig.sideMenuWidthFraction,
       decoration: const BoxDecoration(
         color: AppConfig.surfaceColor,
@@ -36,6 +69,7 @@ class _SideMenuState extends State<SideMenu> {
       ),
       child: SafeArea(
         child: Column(children: [
+          // ── User header ────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.all(AppConfig.paddingXLarge),
             child: Column(children: [
@@ -56,27 +90,42 @@ class _SideMenuState extends State<SideMenu> {
                   ),
                 ),
                 const SizedBox(width: AppConfig.paddingMedium),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      AppConfig.textBerlinReader,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: AppConfig.fontSizeXLarge,
-                        fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _displayName,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: AppConfig.fontSizeXLarge,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    Text(
-                      AppConfig.textBerlinLocation,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: AppOpacity.medium),
-                        fontSize: AppConfig.fontSizeSmall,
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            color: AppConfig.primaryColor,
+                            size: AppConfig.iconSizeSmall,
+                          ),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(
+                              _locationLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: AppOpacity.medium),
+                                fontSize: AppConfig.fontSizeSmall,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-                const Spacer(),
                 IconButton(
                   icon: Icon(
                     Icons.close,
@@ -86,6 +135,7 @@ class _SideMenuState extends State<SideMenu> {
                 ),
               ]),
               const SizedBox(height: AppConfig.paddingLarge),
+              // ── Read / Unread / Total stats ───────────────────────────────
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
@@ -131,90 +181,51 @@ class _SideMenuState extends State<SideMenu> {
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(
-                vertical: AppConfig.paddingSmall,
-              ),
+              padding: const EdgeInsets.symmetric(vertical: AppConfig.paddingSmall),
               children: [
+                // ── My Feed topic chips ─────────────────────────────────────
                 _sectionHeader(
                   AppConfig.textMyFeed,
                   Icons.tune,
                   _myFeedExpanded,
                   () => setState(() => _myFeedExpanded = !_myFeedExpanded),
                 ),
+                if (_myFeedExpanded) ..._buildTopicChips(),
                 if (_myFeedExpanded)
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppConfig.paddingLarge,
                       vertical: AppConfig.paddingSmall,
                     ),
-                    child: Wrap(
-                      spacing: AppConfig.paddingSmall,
-                      runSpacing: AppConfig.paddingSmall,
-                      children: _allTopics.map((t) {
-                        final active = _activeTopics.contains(t);
-                        return GestureDetector(
-                          onTap: () => setState(() {
-                            if (active) {
-                              _activeTopics.remove(t);
-                            } else {
-                              _activeTopics.add(t);
-                            }
-                          }),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppConfig.paddingMedium,
-                              vertical: AppConfig.paddingSmall,
-                            ),
-                            decoration: BoxDecoration(
-                              color: active
-                                  ? AppConfig.primaryColor
-                                      .withValues(alpha: AppOpacity.low)
-                                  : Colors.white
-                                      .withValues(alpha: AppOpacity.trace),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                color: active
-                                    ? AppConfig.primaryColor
-                                    : Colors.white
-                                        .withValues(alpha: AppOpacity.veryLow),
-                              ),
-                            ),
-                            child: Text(
-                              t,
-                              style: TextStyle(
-                                color: active
-                                    ? AppConfig.primaryColor
-                                    : Colors.white
-                                        .withValues(alpha: AppOpacity.medium),
-                                fontSize: AppConfig.fontSizeMedium,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
+                    child: Text(
+                      AppConfig.textAllTopicsLoaded,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: AppOpacity.low),
+                        fontSize: AppConfig.fontSizeSmall,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white.withValues(alpha: AppOpacity.low),
+                      ),
                     ),
                   ),
                 const SizedBox(height: AppConfig.paddingSmall),
+                // ── Trending Now ────────────────────────────────────────────
                 _sectionHeader(
                   AppConfig.textTrendingNow,
                   Icons.local_fire_department,
                   _trendingExpanded,
-                  () => setState(
-                      () => _trendingExpanded = !_trendingExpanded),
+                  () => setState(() => _trendingExpanded = !_trendingExpanded),
                 ),
                 if (_trendingExpanded)
                   ...provider.allItems
                       .take(AppConfig.trendingItemsCount)
                       .map((item) => _newsRow(context, item, provider)),
                 const SizedBox(height: AppConfig.paddingSmall),
+                // ── Top Stories ─────────────────────────────────────────────
                 _sectionHeader(
                   AppConfig.textTopStories,
                   Icons.star,
                   _topStoriesExpanded,
-                  () => setState(
-                      () => _topStoriesExpanded = !_topStoriesExpanded),
+                  () => setState(() => _topStoriesExpanded = !_topStoriesExpanded),
                 ),
                 if (_topStoriesExpanded)
                   ...provider.allItems
@@ -227,6 +238,70 @@ class _SideMenuState extends State<SideMenu> {
         ]),
       ),
     );
+  }
+
+  List<Widget> _buildTopicChips() {
+    return [
+      Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppConfig.paddingLarge,
+          vertical: AppConfig.paddingSmall,
+        ),
+        child: Wrap(
+          spacing: AppConfig.paddingSmall,
+          runSpacing: AppConfig.paddingSmall,
+          children: _allTopics.map((t) {
+            final active = _activeTopics.contains(t);
+            return GestureDetector(
+              onTap: () => _toggleTopic(t),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppConfig.paddingMedium,
+                  vertical: AppConfig.paddingSmall,
+                ),
+                decoration: BoxDecoration(
+                  color: active
+                      ? AppConfig.primaryColor.withValues(alpha: 0.15)
+                      : Colors.white.withValues(alpha: AppOpacity.trace),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: active
+                        ? AppConfig.primaryColor
+                        : Colors.white.withValues(alpha: AppOpacity.veryLow),
+                    width: active ? 1.5 : 1.0,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (active)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Icon(
+                          Icons.check,
+                          color: AppConfig.primaryColor,
+                          size: 11,
+                        ),
+                      ),
+                    Text(
+                      t,
+                      style: TextStyle(
+                        color: active
+                            ? AppConfig.primaryColor
+                            : Colors.white.withValues(alpha: AppOpacity.medium),
+                        fontSize: AppConfig.fontSizeMedium,
+                        fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    ];
   }
 
   Widget _stat(String label, String value, Color color) => Column(children: [
@@ -300,8 +375,7 @@ class _SideMenuState extends State<SideMenu> {
           ),
           child: Row(children: [
             ClipRRect(
-              borderRadius:
-                  BorderRadius.circular(AppConfig.borderRadiusSmall),
+              borderRadius: BorderRadius.circular(AppConfig.borderRadiusSmall),
               child: CachedNetworkImage(
                 imageUrl: item.imageUrl,
                 width: AppConfig.imagePreviewWidth,

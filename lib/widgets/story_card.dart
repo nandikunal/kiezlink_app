@@ -117,7 +117,8 @@ class _StoryCardState extends State<StoryCard> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: AppConfig.successColor.withValues(alpha: AppOpacity.low),
+                        color: AppConfig.successColor
+                            .withValues(alpha: AppOpacity.low),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: const Text(
@@ -203,12 +204,32 @@ class _StoryCardState extends State<StoryCard> {
               item.isBookmarked ? AppConfig.primaryColor : Colors.white,
               () => provider.toggleBookmark(item.id),
             ),
+            const SizedBox(height: AppConfig.paddingSmall),
+            // ── Deduplicated total counter next to bookmark ─────────────────
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: AppOpacity.low),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '${widget.index + 1}/${provider.totalCount > 0 ? provider.totalCount : widget.total}',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: AppOpacity.medium),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
             const SizedBox(height: AppConfig.paddingXLarge),
             _sideBtn(Icons.share, Colors.white, () {}),
           ]),
         ),
 
-        // Story counter
+        // Story counter pill (top-left)
         Positioned(
           top: 104,
           left: AppConfig.paddingLarge,
@@ -225,7 +246,7 @@ class _StoryCardState extends State<StoryCard> {
               ),
             ),
             child: Text(
-              '${widget.index + 1} / ${widget.total}',
+              '${widget.index + 1} / ${provider.totalCount > 0 ? provider.totalCount : widget.total}',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: AppConfig.fontSizeMedium,
