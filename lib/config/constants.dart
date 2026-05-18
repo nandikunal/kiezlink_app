@@ -148,6 +148,7 @@ class AppConfig {
 class AppOpacity {
   AppOpacity._();
 
+  static const double minimal = 0.02;
   static const double trace   = 0.05;
   static const double veryLow = 0.10;
   static const double low     = 0.30;
