@@ -90,7 +90,7 @@ class AppConfig {
 
   // ---------------------------------------------------------------- text / labels
   static const String textAppTitle            = 'Kiezlink';
-  static const String textSearchNews          = 'Search news\u2026';
+  static const String textSearchNews          = 'Search news...';
   static const String textRead                = 'Read';
   static const String textMore                = 'More';
   static const String textLess                = 'Less';
