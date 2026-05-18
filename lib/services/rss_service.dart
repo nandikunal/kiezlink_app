@@ -5,126 +5,209 @@ import '../config/constants.dart';
 import '../models/news_item.dart';
 import '../utils/utils.dart';
 import 'http_client_service.dart';
+import 'session_service.dart';
+import 'location_service.dart';
 
+/// Handles all HTTP communication with the news_feed backend.
+///
+/// Every request includes:
+///   X-API-Key   — from AppConfig.apiKey
+///   X-Device-ID — stable UUID from SessionService.deviceId
+///
+/// The device ID scopes read history, stats, and session state
+/// to this specific installation.
 class RssService {
-  static final HttpClientService _httpClient = HttpClientService(cacheDuration: const Duration(minutes: 5));
-  
-  // Use this URL for physical devices - update with your actual server IP
-  // For Android emulator: 10.0.2.2
-  // For iOS simulator: localhost or 127.0.0.1
-  // For physical devices: your-machine-ip:8000
-  static String _getApiUrl() {
-    // You can implement platform detection here if needed
-    return AppConfig.apiUrlAndroid;
-  }
+  static final HttpClientService _httpClient =
+      HttpClientService(cacheDuration: const Duration(minutes: 5));
 
-  static Future<List<NewsItem>> fetchAll() async {
+  static String get _base => AppConfig.apiBaseUrl;
+
+  static Future<Map<String, String>> _headers() async => {
+        'accept': 'application/json',
+        'X-API-Key': AppConfig.apiKey,
+        'X-Device-ID': SessionService.deviceId,
+      };
+
+  // ---------------------------------------------------------------- today feed
+
+  /// Fetch today's stories for this device.
+  ///
+  /// Sends [?tz=] so the server applies timezone-aware midnight filtering.
+  /// Sends [?topics=] when a topic filter is active.
+  /// Client-side also filters known read IDs as a safety net.
+  static Future<List<NewsItem>> fetchAll({
+    int page = 1,
+    int perPage = 20,
+    List<String>? topics,
+  }) async {
     try {
-      final url = _getApiUrl();
-      developer.log('Fetching news from: $url', name: 'RssService');
+      final tz = await LocationService.getTimezone();
+      final topicParam = (topics != null && topics.isNotEmpty)
+          ? '&topics=${topics.map(Uri.encodeComponent).join(',')}'
+          : '';
+      final url =
+          '$_base/v1/today?page=$page&per_page=$perPage'
+          '&tz=${Uri.encodeComponent(tz)}$topicParam';
 
-      final response = await _httpClient.getCached(
-        url,
-        headers: {
-          'accept': 'application/json',
-          'X-API-Key': AppConfig.apiKey,
-        },
-      );
+      developer.log('GET $url', name: 'RssService');
+      final headers = await _headers();
+      final response = await _httpClient.getCached(url, headers: headers);
 
-      developer.log('API Response Status: ${response.statusCode}', name: 'RssService');
+      if (response.statusCode != 200) return [];
+      if (response.body.isEmpty) return [];
 
-      if (response.statusCode != AppConfig.httpStatusOk) {
-        developer.log('API Error: ${response.statusCode} - ${response.body}', name: 'RssService');
-        return [];
-      }
+      final data = json.decode(response.body) as Map<String, dynamic>;
+      if (!ValidationUtils.isValidApiResponse(data)) return [];
 
-      if (response.body.isEmpty) {
-        developer.log('Empty API response', name: 'RssService');
-        return [];
-      }
-
-      // Log first 200 chars of response
-      final bodyPreview = response.body.length > 200 
-          ? response.body.substring(0, 200) 
-          : response.body;
-      developer.log('Response body: $bodyPreview', name: 'RssService');
-
-      final Map<String, dynamic> data;
-      try {
-        data = json.decode(response.body) as Map<String, dynamic>;
-      } catch (e) {
-        developer.log('JSON decode error: $e', name: 'RssService');
-        return [];
-      }
-
-      if (!ValidationUtils.isValidApiResponse(data)) {
-        developer.log('Invalid API response structure', name: 'RssService');
-        return [];
-      }
-
-      final List<dynamic> stories = data['stories'] ?? [];
-      developer.log('Found ${stories.length} stories', name: 'RssService');
-
+      final stories = (data['stories'] as List? ?? []);
+      final readIds = SessionService.readStoryIds;
       final items = <NewsItem>[];
 
-      for (final story in stories) {
+      for (final s in stories) {
         try {
-          if (!ValidationUtils.isValidNewsItem(story as Map<String, dynamic>)) {
-            developer.log('Skipping invalid story item', name: 'RssService');
-            continue;
-          }
+          final story = s as Map<String, dynamic>;
+          if (!ValidationUtils.isValidNewsItem(story)) continue;
+          final storyId = (story['id'] ?? '').toString();
+          if (readIds.contains(storyId)) continue;
 
-          // Safe DateTime parsing with fallback
-          final publishedAt = DateTimeUtils.parseDateTime(story['published_at']);
-
-          final newsItem = NewsItem(
-            id: (story['id'] ?? '').toString(),
+          items.add(NewsItem(
+            id: storyId,
             title: (story['title'] ?? 'No Title').toString().trim(),
             summary: (story['short_content'] ?? '').toString().trim(),
             content: (story['short_content'] ?? '').toString().trim(),
             imageUrl: (story['image_url'] ?? '').toString().trim(),
             source: (story['source'] ?? 'Unknown').toString().trim(),
             sourceUrl: (story['link'] ?? '').toString().trim(),
-            publishedAt: publishedAt,
+            publishedAt:
+                DateTimeUtils.parseDateTime(story['published_at']),
             category: (story['category'] ?? 'today').toString().trim(),
             tag: (story['topic'] ?? 'general').toString().trim(),
             eventDate: null,
             isRead: story['read'] as bool? ?? false,
             isLiked: story['liked'] as bool? ?? false,
             isBookmarked: story['bookmarked'] as bool? ?? false,
-          );
-          items.add(newsItem);
+          ));
         } catch (e) {
-          developer.log('Error parsing story: $e', name: 'RssService');
-          continue;
+          developer.log('Story parse error: $e', name: 'RssService');
         }
       }
 
-      // Sort by date descending
-      try {
-        items.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
-      } catch (e) {
-        developer.log('Error sorting items: $e', name: 'RssService');
-      }
-
-      developer.log('Successfully parsed ${items.length} items', name: 'RssService');
+      items.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
       return items;
-    } on http.ClientException catch (e) {
-      developer.log('Network error: $e', name: 'RssService');
-      return [];
     } catch (e) {
-      developer.log('Unexpected error in fetchAll: $e', name: 'RssService');
+      developer.log('fetchAll error: $e', name: 'RssService');
       return [];
     }
   }
 
-  /// Clear HTTP cache
-  static void clearCache() {
-    _httpClient.clearCache();
+  // ---------------------------------------------------------------- stats
+
+  /// Fetch deduplicated read/unread/total counts for today (device-scoped).
+  /// Call on app launch and after every markReadOnServer() to keep UI in sync.
+  static Future<Map<String, int>> fetchStats() async {
+    try {
+      final headers = await _headers();
+      final response = await http.get(
+        Uri.parse('$_base/v1/today/stats'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        return {
+          'read': (data['read'] as num?)?.toInt() ?? 0,
+          'unread': (data['unread'] as num?)?.toInt() ?? 0,
+          'total': (data['deduplicated_total'] as num?)?.toInt() ?? 0,
+        };
+      }
+    } catch (e) {
+      developer.log('fetchStats error: $e', name: 'RssService');
+    }
+    return {'read': 0, 'unread': 0, 'total': 0};
   }
 
-  /// Get cache statistics
-  static Map<String, dynamic> getCacheStats() {
-    return _httpClient.getCacheStats();
+  // ---------------------------------------------------------------- updates poll
+
+  /// Poll /v1/today/updates?since=<iso> and return the count of new stories.
+  /// Returns 0 on any error so the caller can safely ignore failures.
+  static Future<int> checkUpdates({required DateTime since}) async {
+    try {
+      final headers = await _headers();
+      final sinceStr = Uri.encodeComponent(since.toUtc().toIso8601String());
+      final response = await http.get(
+        Uri.parse('$_base/v1/today/updates?since=$sinceStr'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        return (data['total_new'] as num?)?.toInt() ?? 0;
+      }
+    } catch (e) {
+      developer.log('checkUpdates error: $e', name: 'RssService');
+    }
+    return 0;
   }
+
+  // ---------------------------------------------------------------- actions
+
+  /// Mark a story read on the server for this device. Fire-and-forget.
+  static Future<void> markReadOnServer(String storyId) async {
+    try {
+      final headers = await _headers();
+      await http.post(
+        Uri.parse('$_base/v1/stories/$storyId/read'),
+        headers: headers,
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> likeStory(String storyId) async {
+    try {
+      final headers = await _headers();
+      await http.post(
+        Uri.parse('$_base/v1/stories/$storyId/like'),
+        headers: headers,
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> bookmarkStory(String storyId) async {
+    try {
+      final headers = await _headers();
+      await http.post(
+        Uri.parse('$_base/v1/stories/$storyId/bookmark'),
+        headers: headers,
+      );
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------- session
+
+  /// Sync session state to server (debounced in NewsProvider to 500 ms).
+  static Future<void> syncSession({
+    required int lastIndex,
+    required List<String> topics,
+    required String displayName,
+    required String locationLabel,
+  }) async {
+    try {
+      final headers = {
+        ...await _headers(),
+        'Content-Type': 'application/json',
+      };
+      await http.put(
+        Uri.parse('$_base/v1/today/session'),
+        headers: headers,
+        body: json.encode({
+          'last_story_index': lastIndex,
+          'selected_topics': topics,
+          'display_name': displayName,
+          'location_label': locationLabel,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------- cache
+  static void clearCache() => _httpClient.clearCache();
+  static Map<String, dynamic> getCacheStats() => _httpClient.getCacheStats();
 }
