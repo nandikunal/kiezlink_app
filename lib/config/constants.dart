@@ -39,7 +39,7 @@ class AppConfig {
   static const Duration animationDurationSlow   = Duration(milliseconds: 600);
 
   // ---------------------------------------------------------------- colours
-  static const Color primaryColor     = Color(0xFFFFC107); // amber / kiezlink gold
+  static const Color primaryColor     = Color(0xFFFFC107);
   static const Color backgroundColor  = Color(0xFF121212);
   static const Color surfaceColor     = Color(0xFF1E1E1E);
   static const Color errorColor       = Color(0xFFCF6679);
@@ -90,7 +90,7 @@ class AppConfig {
 
   // ---------------------------------------------------------------- text / labels
   static const String textAppTitle            = 'Kiezlink';
-  static const String textSearchNews          = 'Search news…';
+  static const String textSearchNews          = 'Search news...';
   static const String textRead                = 'Read';
   static const String textMore                = 'More';
   static const String textLess                = 'Less';
@@ -111,12 +111,12 @@ class AppConfig {
   static const String textTotalCount  = 'Total';
 
   // ---------------------------------------------------------------- side menu labels
-  static const String textMyFeed        = 'My Feed';
-  static const String textTrendingNow   = 'Trending Now';
-  static const String textTopStories    = 'Top Stories';
+  static const String textMyFeed      = 'My Feed';
+  static const String textTrendingNow = 'Trending Now';
+  static const String textTopStories  = 'Top Stories';
 
   // ---------------------------------------------------------------- side menu limits
-  static const int trendingItemsCount  = 3;
+  static const int trendingItemsCount   = 3;
   static const int topStoriesItemsCount = 3;
 
   // ---------------------------------------------------------------- topics
@@ -138,8 +138,6 @@ class AppConfig {
   /// Maps display label to the backend TopicLabel enum value.
   static String topicToApiValue(String displayLabel) =>
       displayLabel.toLowerCase();
-
-  static const double minimal = 0.02;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
