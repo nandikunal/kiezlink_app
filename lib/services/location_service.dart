@@ -35,7 +35,7 @@ class LocationService {
       }
 
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.city,
+        desiredAccuracy: LocationAccuracy.medium,
         timeLimit: const Duration(seconds: 8),
       );
 
