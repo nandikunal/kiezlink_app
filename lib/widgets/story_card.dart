@@ -31,212 +31,288 @@ class _StoryCardState extends State<StoryCard> {
   Widget build(BuildContext context) {
     final provider = context.watch<NewsProvider>();
     final item = widget.item;
+    // Respect system bottom padding (nav bar) so text is never hidden.
+    final bottomInset = MediaQuery.of(context).padding.bottom;
 
-    return Stack(
-      fit: StackFit.expand,
+    return Column(
       children: [
-        // Hero image
-        if (ValidationUtils.isValidImageUrl(item.imageUrl))
-          CachedNetworkImage(
-            imageUrl: item.imageUrl,
-            fit: BoxFit.cover,
-            placeholder: (_, __) => Container(color: const Color(0xFF1C1917)),
-            errorWidget: (_, __, ___) => _imageFallback(),
-          )
-        else
-          _imageFallback(),
+        // ── TOP: image section (fills ~60% of screen) ─────────────────────
+        Expanded(
+          flex: 60,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Hero image
+              if (ValidationUtils.isValidImageUrl(item.imageUrl))
+                CachedNetworkImage(
+                  imageUrl: item.imageUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) =>
+                      Container(color: const Color(0xFF1C1917)),
+                  errorWidget: (_, __, ___) => _imageFallback(),
+                )
+              else
+                _imageFallback(),
 
-        // Gradient overlay
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.1),
-                Colors.transparent,
-                Colors.black.withValues(alpha: 0.55),
-                Colors.black.withValues(alpha: 0.97),
-              ],
-              stops: GradientStops.cardGradient,
-            ),
-          ),
-        ),
-
-        // Main content bottom-left
-        Positioned(
-          left: 0,
-          right: 60,
-          bottom: 0,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppConfig.paddingXLarge,
-              0,
-              AppConfig.paddingXLarge,
-              AppConfig.paddingXLarge,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppConfig.paddingSmall,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: AppOpacity.veryLow),
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: AppOpacity.veryLow),
-                      ),
-                    ),
-                    child: Text(
-                      item.source,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: AppConfig.fontSizeXSmall,
-                        fontWeight: FontWeight.w600,
-                      ),
+              // Subtle bottom fade so image bleeds into text panel
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                height: 80,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        AppConfig.backgroundColor.withValues(alpha: 0.95),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: AppConfig.paddingSmall),
-                  Text(
-                    DateTimeUtils.timeAgo(item.publishedAt),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: AppOpacity.medium),
-                      fontSize: AppConfig.fontSizeXSmall,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (item.isRead)
+                ),
+              ),
+
+              // ── Source badge + counter row (top-left / top-right) ────────
+              Positioned(
+                top: MediaQuery.of(context).padding.top +
+                    AppConfig.paddingMedium,
+                left: AppConfig.paddingLarge,
+                right: AppConfig.paddingLarge,
+                child: Row(
+                  children: [
+                    // Source pill
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: AppConfig.paddingSmall / 2,
-                        vertical: 2,
+                        horizontal: AppConfig.paddingSmall,
+                        vertical: 3,
                       ),
                       decoration: BoxDecoration(
-                        color: AppConfig.successColor.withValues(alpha: AppOpacity.low),
+                        color: Colors.black
+                            .withValues(alpha: AppOpacity.medium),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        AppConfig.textRead,
-                        style: TextStyle(
-                          color: AppConfig.successColor,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
+                      child: Text(
+                        item.source,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: AppConfig.fontSizeXSmall,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
-                ]),
-                const SizedBox(height: AppConfig.paddingMedium),
-                TagChip(tag: item.tag),
-                const SizedBox(height: AppConfig.paddingMedium),
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: AppConfig.fontSizeGiant,
-                    fontWeight: FontWeight.w800,
-                    height: 1.25,
-                  ),
-                ),
-                const SizedBox(height: AppConfig.paddingMedium),
-                AnimatedCrossFade(
-                  duration: AppConfig.animationDurationNormal,
-                  crossFadeState: _expanded
-                      ? CrossFadeState.showSecond
-                      : CrossFadeState.showFirst,
-                  firstChild: Text(
-                    item.summary,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: AppOpacity.high),
-                      fontSize: AppConfig.fontSizeLarge,
-                      height: 1.5,
+                    const Spacer(),
+                    // Story counter  e.g.  7 / 20
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppConfig.paddingMedium,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black
+                            .withValues(alpha: AppOpacity.medium),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${widget.index + 1} / ${widget.total}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: AppConfig.fontSizeMedium,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
-                  ),
-                  secondChild: Text(
-                    item.content,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: AppOpacity.high),
-                      fontSize: AppConfig.fontSizeLarge,
-                      height: 1.5,
-                    ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: AppConfig.paddingMedium),
-                Row(children: [
-                  _actionBtn(
-                    _expanded ? Icons.unfold_less : Icons.unfold_more,
-                    _expanded ? AppConfig.textLess : AppConfig.textMore,
-                    () => setState(() => _expanded = !_expanded),
-                  ),
-                  const SizedBox(width: AppConfig.paddingSmall),
-                  _actionBtn(
-                    Icons.open_in_browser,
-                    AppConfig.textFullStory,
-                    () => _launch(item.sourceUrl),
-                    color: AppConfig.primaryColor,
-                  ),
-                ]),
-              ],
-            ),
+              ),
+
+              // ── Right side action buttons ────────────────────────────────
+              Positioned(
+                right: AppConfig.paddingMedium,
+                bottom: AppConfig.paddingXLarge,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _sideBtn(
+                      item.isLiked ? Icons.favorite : Icons.favorite_border,
+                      item.isLiked ? Colors.red : Colors.white,
+                      () => provider.toggleLike(item.id),
+                    ),
+                    const SizedBox(height: AppConfig.paddingLarge),
+                    _sideBtn(
+                      item.isBookmarked
+                          ? Icons.bookmark
+                          : Icons.bookmark_border,
+                      item.isBookmarked
+                          ? AppConfig.primaryColor
+                          : Colors.white,
+                      () => provider.toggleBookmark(item.id),
+                    ),
+                    const SizedBox(height: AppConfig.paddingLarge),
+                    _sideBtn(Icons.share, Colors.white, () {}),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
 
-        // Right side action buttons
-        Positioned(
-          right: AppConfig.paddingMedium,
-          bottom: 120,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            _sideBtn(
-              item.isLiked ? Icons.favorite : Icons.favorite_border,
-              item.isLiked ? Colors.red : Colors.white,
-              () => provider.toggleLike(item.id),
-            ),
-            const SizedBox(height: AppConfig.paddingXLarge),
-            _sideBtn(
-              item.isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-              item.isBookmarked ? AppConfig.primaryColor : Colors.white,
-              () => provider.toggleBookmark(item.id),
-            ),
-            const SizedBox(height: AppConfig.paddingXLarge),
-            _sideBtn(Icons.share, Colors.white, () {}),
-          ]),
-        ),
-
-        // Story counter
-        Positioned(
-          top: 104,
-          left: AppConfig.paddingLarge,
+        // ── BOTTOM: solid text panel (~40% of screen) ─────────────────────
+        // This section has a fixed dark background — nav bar will never
+        // overlap content because we add bottomInset padding at the very end.
+        Expanded(
+          flex: 40,
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppConfig.paddingMedium,
-              vertical: AppConfig.paddingSmall,
+            width: double.infinity,
+            color: AppConfig.backgroundColor,
+            padding: EdgeInsets.fromLTRB(
+              AppConfig.paddingLarge,
+              AppConfig.paddingMedium,
+              AppConfig.paddingLarge,
+              AppConfig.paddingMedium + bottomInset,
             ),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: AppOpacity.medium),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: AppOpacity.veryLow),
-              ),
-            ),
-            child: Text(
-              '${widget.index + 1} / ${widget.total}',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: AppConfig.fontSizeMedium,
-                fontWeight: FontWeight.w600,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Meta row: feed label + topic tag + time ──────────────
+                Row(
+                  children: [
+                    // Feed source label  e.g.  • NYT > Top S...
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(
+                          right: AppConfig.paddingSmall),
+                      decoration: const BoxDecoration(
+                        color: AppConfig.primaryColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        item.source,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white
+                              .withValues(alpha: AppOpacity.medium),
+                          fontSize: AppConfig.fontSizeSmall,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppConfig.paddingSmall),
+                    TagChip(tag: item.tag),
+                    const Spacer(),
+                    // Bookmark / read badge
+                    if (item.isRead)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppConfig.successColor
+                              .withValues(alpha: AppOpacity.low),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          AppConfig.textRead,
+                          style: TextStyle(
+                            color: AppConfig.successColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: AppConfig.paddingSmall),
+
+                // ── Headline ─────────────────────────────────────────────
+                Expanded(
+                  child: AnimatedCrossFade(
+                    duration: AppConfig.animationDurationNormal,
+                    crossFadeState: _expanded
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    firstChild: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          item.title,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: AppConfig.fontSizeXXLarge,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
+                          ),
+                        ),
+                        const SizedBox(height: AppConfig.paddingSmall),
+                        Text(
+                          item.summary,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white
+                                .withValues(alpha: AppOpacity.medium),
+                            fontSize: AppConfig.fontSizeMedium,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                    secondChild: SingleChildScrollView(
+                      child: Text(
+                        item.content,
+                        style: TextStyle(
+                          color:
+                              Colors.white.withValues(alpha: AppOpacity.high),
+                          fontSize: AppConfig.fontSizeMedium,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: AppConfig.paddingSmall),
+
+                // ── Bottom action row ─────────────────────────────────────
+                Row(
+                  children: [
+                    // Time ago
+                    Text(
+                      DateTimeUtils.timeAgo(item.publishedAt),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: AppOpacity.low),
+                        fontSize: AppConfig.fontSizeSmall,
+                      ),
+                    ),
+                    const Spacer(),
+                    _actionBtn(
+                      _expanded ? Icons.unfold_less : Icons.unfold_more,
+                      _expanded ? AppConfig.textLess : AppConfig.textMore,
+                      () => setState(() => _expanded = !_expanded),
+                    ),
+                    const SizedBox(width: AppConfig.paddingSmall),
+                    // "Tap to know more" styled button
+                    _actionBtn(
+                      Icons.open_in_browser,
+                      AppConfig.textFullStory,
+                      () => _launch(item.sourceUrl),
+                      color: AppConfig.primaryColor,
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
       ],
     );
   }
+
+  // ── helpers ──────────────────────────────────────────────────────────────
 
   Widget _imageFallback() => Container(
         decoration: const BoxDecoration(
@@ -262,7 +338,7 @@ class _StoryCardState extends State<StoryCard> {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: AppOpacity.low),
+            color: Colors.black.withValues(alpha: AppOpacity.medium),
             shape: BoxShape.circle,
             border: Border.all(
               color: Colors.white.withValues(alpha: AppOpacity.veryLow),
@@ -286,14 +362,19 @@ class _StoryCardState extends State<StoryCard> {
             vertical: AppConfig.paddingSmall,
           ),
           decoration: BoxDecoration(
-            color: (color ?? Colors.white).withValues(alpha: AppOpacity.veryLow),
-            borderRadius: BorderRadius.circular(AppConfig.borderRadiusSmall),
+            color: (color ?? Colors.white)
+                .withValues(alpha: AppOpacity.veryLow),
+            borderRadius:
+                BorderRadius.circular(AppConfig.borderRadiusSmall),
             border: Border.all(
-              color: (color ?? Colors.white).withValues(alpha: AppOpacity.veryLow),
+              color: (color ?? Colors.white)
+                  .withValues(alpha: AppOpacity.veryLow),
             ),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: color ?? Colors.white, size: AppConfig.iconSizeSmall),
+            Icon(icon,
+                color: color ?? Colors.white,
+                size: AppConfig.iconSizeSmall),
             const SizedBox(width: AppConfig.paddingSmall),
             Text(
               label,
@@ -312,7 +393,8 @@ class _StoryCardState extends State<StoryCard> {
       if (url.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text(AppConfig.errorUrlNotAvailable)),
+            const SnackBar(
+                content: Text(AppConfig.errorUrlNotAvailable)),
           );
         }
         return;
@@ -323,14 +405,16 @@ class _StoryCardState extends State<StoryCard> {
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text(AppConfig.errorCouldNotOpenUrl)),
+            const SnackBar(
+                content: Text(AppConfig.errorCouldNotOpenUrl)),
           );
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(AppConfig.errorFailedToOpenUrl)),
+          const SnackBar(
+              content: Text(AppConfig.errorFailedToOpenUrl)),
         );
       }
     }
