@@ -4,14 +4,25 @@ import 'package:provider/provider.dart';
 import 'config/constants.dart';
 import 'data/news_provider.dart';
 import 'screens/today_screen.dart';
+import 'services/session_service.dart';
+import 'services/location_service.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
+
+  // Init session (device ID, funny name, read history, last index)
+  await SessionService.init();
+
+  // Request location on first launch only; subsequent launches use cached label
+  if (!LocationService.permissionAlreadyAsked) {
+    await LocationService.requestAndResolve();
+  }
+
   runApp(const KiezlinkApp());
 }
 

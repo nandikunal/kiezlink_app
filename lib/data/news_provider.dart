@@ -14,9 +14,10 @@ enum FeedState { idle, loading, loaded, error }
 ///   If the server returns new story IDs not in the previous list, resets
 ///   to index 0 and shows a "new stories" banner.
 /// - [markAsRead]: Updates local session + calls server, then refreshes stats.
-/// - [setTopicFilter]: Persists selected tags to session, triggers a reload.
-/// - [notifyNewStoriesAvailable]: Called by the SSE listener in TodayScreen
-///   when /v1/today/updates fires; shows a non-intrusive banner.
+/// - [toggleTopic] / [setTopicFilter]: Persists selected tags to session,
+///   triggers a reload via [loadFeeds]. An empty filter = show all topics.
+/// - [notifyNewStoriesAvailable]: Called by the TodayScreen SSE poll when
+///   /v1/today/updates fires; shows a non-intrusive banner.
 class NewsProvider extends ChangeNotifier {
   List<NewsItem> _allItems = [];
   List<String> _previousStoryIds = [];
@@ -28,12 +29,15 @@ class NewsProvider extends ChangeNotifier {
   Timer? _searchDebounceTimer;
   Timer? _sessionSyncTimer;
 
-  // Server-side stats (device-scoped)
+  // Server-side stats (device-scoped, fetched from /v1/today/stats)
   int _serverRead = 0;
   int _serverUnread = 0;
   int _serverTotal = 0;
 
+  // Active topic filter — empty list means "show all"
   List<String> _selectedTopics = [];
+
+  // Whether the SSE poll detected new stories the user has not yet loaded
   bool _hasNewStories = false;
 
   // ---------------------------------------------------------------- getters
@@ -57,16 +61,32 @@ class NewsProvider extends ChangeNotifier {
   int get totalCount =>
       _serverTotal > 0 ? _serverTotal : _allItems.length;
 
+  /// Items after applying search AND topic filter (client-side).
   List<NewsItem> get filteredItems {
-    if (_searchQuery.isEmpty) return _allItems;
-    final q = _searchQuery.toLowerCase().trim();
-    return _allItems
-        .where((i) =>
-            i.title.toLowerCase().contains(q) ||
-            i.summary.toLowerCase().contains(q) ||
-            i.tag.toLowerCase().contains(q) ||
-            i.source.toLowerCase().contains(q))
-        .toList();
+    var items = _allItems;
+
+    // Topic filter (client-side safety net — server already filters via topics param)
+    if (_selectedTopics.isNotEmpty) {
+      final lowerTopics =
+          _selectedTopics.map((t) => t.toLowerCase()).toSet();
+      items = items
+          .where((i) => lowerTopics.contains(i.tag.toLowerCase()))
+          .toList();
+    }
+
+    // Search filter
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase().trim();
+      items = items
+          .where((i) =>
+              i.title.toLowerCase().contains(q) ||
+              i.summary.toLowerCase().contains(q) ||
+              i.tag.toLowerCase().contains(q) ||
+              i.source.toLowerCase().contains(q))
+          .toList();
+    }
+
+    return items;
   }
 
   // ---------------------------------------------------------------- load
@@ -83,7 +103,7 @@ class NewsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Parallel fetch: stats + stories
+      // Parallel: stats + stories
       final results = await Future.wait([
         RssService.fetchStats(),
         RssService.fetchAll(
@@ -99,7 +119,7 @@ class NewsProvider extends ChangeNotifier {
       _serverUnread = stats['unread'] ?? 0;
       _serverTotal = stats['total'] ?? 0;
 
-      if (items.isEmpty) {
+      if (items.isEmpty && _selectedTopics.isEmpty) {
         _state = FeedState.error;
         _errorMessage = 'No new stories today. All caught up! \u2615';
         notifyListeners();
@@ -137,12 +157,14 @@ class NewsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refresh() => loadFeeds();
+
   // ---------------------------------------------------------------- index
 
   void setCurrentIndex(int index) {
     if (_currentIndex == index) return;
     _currentIndex = index;
-    // Debounce write to 500ms to avoid hammering storage on fast swipes
+    // Debounce write to 500 ms to avoid hammering storage on fast swipes
     _sessionSyncTimer?.cancel();
     _sessionSyncTimer = Timer(const Duration(milliseconds: 500), () {
       SessionService.saveLastIndex(index);
@@ -158,9 +180,7 @@ class NewsProvider extends ChangeNotifier {
       final idx = _allItems.indexWhere((i) => i.id == id);
       if (idx == -1 || _allItems[idx].isRead) return;
       _allItems[idx].isRead = true;
-      // Persist locally so it survives restart without a server round-trip
       await SessionService.markRead(id);
-      // Async server update — fire-and-forget
       RssService.markReadOnServer(id);
       await _refreshStats();
       notifyListeners();
@@ -178,10 +198,9 @@ class NewsProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
-  // -------------------------------------------------------------- topic filter
+  // ---------------------------------------------------------------- topic filter
 
-  /// Toggle a single topic. If [topic] is in the current filter, remove it;
-  /// otherwise add it. An empty filter means "show all".
+  /// Toggle a single topic tag. Empty filter = show all.
   void toggleTopic(String topic) {
     final updated = List<String>.from(_selectedTopics);
     if (updated.contains(topic)) {
@@ -192,7 +211,13 @@ class NewsProvider extends ChangeNotifier {
     setTopicFilter(updated);
   }
 
-  /// Replace the topic filter entirely and reload the feed.
+  bool isTopicSelected(String topic) =>
+      _selectedTopics.isEmpty || _selectedTopics.contains(topic);
+
+  bool isTopicExplicitlySelected(String topic) =>
+      _selectedTopics.contains(topic);
+
+  /// Replace the topic filter entirely and reload the feed from the server.
   void setTopicFilter(List<String> topics) {
     _selectedTopics = List.from(topics);
     SessionService.saveTopics(topics);
@@ -201,18 +226,15 @@ class NewsProvider extends ChangeNotifier {
     loadFeeds();
   }
 
-  bool isTopicSelected(String topic) => _selectedTopics.contains(topic);
-
   // ------------------------------------------------------------- SSE callback
 
-  /// Called by the SSE listener in TodayScreen when /v1/today/updates fires.
-  /// Shows a non-intrusive "new stories" banner without auto-refreshing.
+  /// Called when the polling timer in TodayScreen detects new stories.
   void notifyNewStoriesAvailable() {
     _hasNewStories = true;
     notifyListeners();
   }
 
-  /// Called when user taps the "new stories" banner.
+  /// Called when the user taps the "new stories" banner.
   Future<void> reloadAfterNewStories() async {
     _hasNewStories = false;
     await loadFeeds();
@@ -223,7 +245,7 @@ class NewsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ------------------------------------------------------------------ actions
+  // ---------------------------------------------------------------- actions
 
   void toggleLike(String id) {
     final idx = _allItems.indexWhere((i) => i.id == id);

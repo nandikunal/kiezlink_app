@@ -11,8 +11,8 @@ import 'location_service.dart';
 /// Handles all HTTP communication with the news_feed backend.
 ///
 /// Every request includes:
-///   X-API-Key      — from AppConfig.apiKey
-///   X-Device-ID    — stable UUID from SessionService.deviceId
+///   X-API-Key   — from AppConfig.apiKey
+///   X-Device-ID — stable UUID from SessionService.deviceId
 ///
 /// The device ID scopes read history, stats, and session state
 /// to this specific installation.
@@ -30,11 +30,11 @@ class RssService {
 
   // ---------------------------------------------------------------- today feed
 
-  /// Fetch today's unread stories for this device.
+  /// Fetch today's stories for this device.
   ///
-  /// Sends [?tz=] so the server can apply timezone-aware midnight filtering.
+  /// Sends [?tz=] so the server applies timezone-aware midnight filtering.
   /// Sends [?topics=] when a topic filter is active.
-  /// Client-side also filters out locally known read IDs as a safety net.
+  /// Client-side also filters known read IDs as a safety net.
   static Future<List<NewsItem>> fetchAll({
     int page = 1,
     int perPage = 20,
@@ -68,7 +68,7 @@ class RssService {
           final story = s as Map<String, dynamic>;
           if (!ValidationUtils.isValidNewsItem(story)) continue;
           final storyId = (story['id'] ?? '').toString();
-          if (readIds.contains(storyId)) continue; // client-side safety net
+          if (readIds.contains(storyId)) continue;
 
           items.add(NewsItem(
             id: storyId,
@@ -125,6 +125,28 @@ class RssService {
     return {'read': 0, 'unread': 0, 'total': 0};
   }
 
+  // ---------------------------------------------------------------- updates poll
+
+  /// Poll /v1/today/updates?since=<iso> and return the count of new stories.
+  /// Returns 0 on any error so the caller can safely ignore failures.
+  static Future<int> checkUpdates({required DateTime since}) async {
+    try {
+      final headers = await _headers();
+      final sinceStr = Uri.encodeComponent(since.toUtc().toIso8601String());
+      final response = await http.get(
+        Uri.parse('$_base/v1/today/updates?since=$sinceStr'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        return (data['total_new'] as num?)?.toInt() ?? 0;
+      }
+    } catch (e) {
+      developer.log('checkUpdates error: $e', name: 'RssService');
+    }
+    return 0;
+  }
+
   // ---------------------------------------------------------------- actions
 
   /// Mark a story read on the server for this device. Fire-and-forget.
@@ -160,7 +182,7 @@ class RssService {
 
   // ---------------------------------------------------------------- session
 
-  /// Sync session state to server (debounced in NewsProvider to 500ms).
+  /// Sync session state to server (debounced in NewsProvider to 500 ms).
   static Future<void> syncSession({
     required int lastIndex,
     required List<String> topics,
